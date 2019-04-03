@@ -1,0 +1,26 @@
+{
+  "name": "ssrf-free-request",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=10.0.0"
+  },
+  "description": "Node request library on top of http\\https modules which prevents SSRF attacks on hostname.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oshnix/ssrf-free-request.git"
+  },
+  "keywords": [
+    "ssrf",
+    "request"
+  ],
+  "author": "Daniil Sloboda <sdsdaniil@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/oshnix/ssrf-free-request/issues"
+  },
+  "homepage": "https://github.com/oshnix/ssrf-free-request#readme"
+}
