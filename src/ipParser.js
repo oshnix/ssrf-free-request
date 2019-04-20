@@ -1,24 +1,6 @@
 const { URL } = require('url');
 const dns = require('dns');
 
-function dnsLookup (hostnameInfo, IPv6Preferred) {
-	let result = hostnameInfo;
-
-	return new Promise ((resolve) => {
-		dns.lookup(hostnameInfo, { all: true, verbatim: false }, (err, addresses) => {
-			if (!err) {
-				if (IPv6Preferred) {
-					addresses = addresses.reverse();
-				}
-				if (addresses.length && addresses[0].address) {
-					result = addresses[0].address;
-				}
-			}
-			resolve(result);
-		})
-	});
-}
-
 const IPv4RestrictedCIDRs = [
 	{
 		mask: '10.0.0.0',
@@ -46,7 +28,55 @@ const IPv4RestrictedCIDRs = [
 	}
 ];
 
+const IPv6RestrictedCIDRs = [
+	{
+		mask: '::1',
+		bits: 128
+	},
+	{
+		mask: '::ffff:0:0',
+		bits: 96
+	},
+	{
+		mask: '::ffff:0:0:0',
+		bits: 96
+	},
+	{
+		mask: '64:ff9b::',
+		bits: 96
+	},
+	{
+		mask: '',
+		bits: 0
+	},
+	{
+		mask: '',
+		bits: 0
+	},
+	{
+		mask: '',
+		bits: 0
+	},
+	{
+		mask: '',
+		bits: 0
+	},
+	{
+		mask: '',
+		bits: 0
+	},
+]
+
+const IPv4Mapped = {
+	mask: '0000:0000:0000:0000:0000:ffff',
+	bits: 96
+}
+
 const IPv4Octets = (ip) => ip.split('.').map(octet => parseInt(octet, 10));
+
+const IPv6Octets = (ip) => ip.split(':')
+	.map(hextet => ([hextet.slice(0, 2), hextet.slice(2, 4)])).flat()
+	.map(octet => parseInt(octet, 16));
 
 function inCidr (addrOctets, maskOctets, bits) {
 	let counter = 0, addrPart, maskPart;
@@ -54,7 +84,7 @@ function inCidr (addrOctets, maskOctets, bits) {
 		addrPart = addrOctets[counter];
 		maskPart = maskOctets[counter];
 
-		bits -= 4;
+		bits -= 8;
 
 		if (bits < 0) {
 			addrPart >>= -bits;
@@ -68,37 +98,116 @@ function inCidr (addrOctets, maskOctets, bits) {
 	return true;
 }
 
-function isValidPublicIPv4 (ip) {
-	// is ip in valid notation
-	if (!ip.match(/^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/)) {
-		return false;
+function parseFamily (hostname) {
+	let retVal = null;
+	if (isValidIPv4(hostname)) {
+		retVal = '4'
+	} else if (/^\[[^\]]*$/.test(hostname)) {
+		retVal = '6';
 	}
+	return retVal;
+}
+
+function dnsLookup (hostnameInfo, IPv6Preferred) {
+	let result = hostnameInfo;
+
+	return new Promise ((resolve) => {
+		dns.lookup(hostnameInfo, { all: true, verbatim: false }, (err, addresses) => {
+			if (!err) {
+				console.log(addresses);
+				if (IPv6Preferred) {
+					addresses = addresses.reverse();
+				}
+				if (addresses.length && addresses[0].address) {
+					result = addresses[0];
+				}
+			}
+			resolve(result);
+		})
+	});
+}
+
+function isValidIPv4 (ip) {
+	// is ip in valid notation
+	return /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/.test(ip);
+}
+
+function isPublicIPv4 (ip) {
 	// Restrict meta-address
 	if (ip === '0.0.0.0') {
 		return false
 	}
 
 	const ipOctets = IPv4Octets(ip);
-
-	return IPv4RestrictedCIDRs.every(({ mask, bits }) => inCidr(ipOctets, IPv4Octets(mask), bits));
+	return !IPv4RestrictedCIDRs.some(({ mask, bits }) => inCidr(ipOctets, IPv4Octets(mask), bits));
 }
 
-async function parseAndValidateUrl (urlString, { IPv6Preferred = false, IPv6Enabled = false }) {
-	const url = new URL(urlString);
-	try {
-		url.hostname = await dnsLookup(url.hostname, IPv6Preferred)
-	} catch (e) { /* Still gonna try parse IPv4 | IPv6 */ }
-
-	if (
-		isValidPublicIPv4(url.hostname)
-		// || isValidPublicIPv6(url.hostname)
-	) {
-		return url.hostname
-	} else {
-		throw new Error('Invalid url string');
+function isPublicIPv6(ip) {
+	if (ip === normalizeIPv6Address('::') || ip === normalizeIPv6Address("::1")) {
+		return false;
 	}
+
+
+
 }
+
+function isPrivateAddress (hostname, family) {
+	if (family === '4' && isValidIPv4(hostname) && !isPublicIPv4(hostname)) {
+		return true;
+	}
+
+	if (family === '6') {
+		if (isIPv4Mapped(hostname)) {
+			return isPrivateAddress(IPv4MappedToIPv4(hostname), '4');
+		}
+		return !isPublicIPv6(hostname);
+
+	}
+
+	return false;
+}
+
+function normalizeIPv6Address (address) {
+	let match = address.match(/^\[([^\]]*)]$/);
+	if (match && match[1]) {
+		address = match[1];
+	} else {
+		throw new Error(`Invalid IPv6 address ${address}`);
+	}
+
+	let hextets = address.split(':');
+	let last = hextets.length -1;
+	if (hextets[0] === '') {
+		hextets[0] = '0'
+	}
+	if (hextets[last] === '') {
+		hextets[last] = '0'
+	}
+
+	return hextets.map(hextet => {
+		if (hextet === '') {
+			return new Array(8 - hextets.length + 1).fill('0000').join(':');
+		}
+		return hextet.padStart(4, '0');
+	}).join(':');
+}
+
+function isIPv4Mapped (addr) {
+	const addrOctets = IPv6Octets(addr);
+	console.log(addrOctets);
+	return inCidr(addrOctets, IPv6Octets(IPv4Mapped.mask), IPv4Mapped.bits);
+}
+
+function IPv4MappedToIPv4 (addr) {
+	return IPv6Octets(addr).slice(12, 16).map(octet => octet.toString()).join('.');
+}
+
 
 module.exports = {
-	parseAndValidateUrl
+	isPrivateAddress,
+	dnsLookup,
+	parseFamily,
+	normalizeIPv6Address,
+	isIPv4Mapped,
+	IPv4MappedToIPv4
 };
