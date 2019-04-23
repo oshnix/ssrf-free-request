@@ -22,74 +22,62 @@ class SSRFFreeRequest {
 	}
 
 	async request(address) {
-		try {
-			// parse ip
-			// Parse hostname. If is it just an ip - then, check it.
-			// Choose between secure and insecure protocol.
-			// Perform a request with custom lookup
+		// parse ip
+		// Parse hostname. If is it just an ip - then, check it.
+		// Choose between secure and insecure protocol.
+		// Perform a request with custom lookup
 
-			const url = new URL(address);
+		const url = new URL(address);
 
-			const family = parseFamily(url.hostname);
+		const family = parseFamily(url.hostname);
 
-			if (family === 6) {
-				url.hostname = normalizeIPv6Address(url.hostname);
+		this.checkAddress(url.hostname, family);
+
+		const requestModule = url.protocol === 'https:' ? https : http;
+
+		const lookup = async (hostname, options, callback) => {
+			let err = undefined;
+			let { address, family } = await dnsLookup(hostname, this.options.IPv6Preferred);
+
+			this.checkAddress(address, family);
+
+			callback(err, address, family);
+		};
+
+		const serverAnswer = await new Promise((resolve, reject) => {
+			try {
+				const request = requestModule.get(url, {lookup}, res => {
+					if (res.statusCode >= 200 && res.statusCode < 300) {
+						let body = '';
+						res.on('data', data => {
+							body += data;
+						});
+						res.on('end', () => {
+							resolve({last: true, body, response: res});
+						});
+					} else if (
+						res.statusCode >= 300
+						&& res.statusCode < 400
+						&& res.headers.hasOwnProperty('location')
+					) {
+						resolve({last: false, redirect: res.headers.location});
+					} else {
+						reject({code: res.statusCode, response: res});
+					}
+				});
+
+				request.on('error', err => {
+					reject(err);
+				});
+			} catch (e) {
+				reject(e);
 			}
+		});
 
-			this.checkAddress(url.hostname, family);
-
-			const requestModule = url.protocol === 'https:' ? https : http;
-
-			const lookup = async (hostname, options, callback) => {
-				let err = undefined;
-				let {address, family} = await dnsLookup(hostname, this.options.IPv6Preferred);
-				if (family === 6) {
-					address = normalizeIPv6Address(address);
-				}
-
-				this.checkAddress(address, family);
-
-				callback(err, address, family);
-			};
-
-			const serverAnswer = await new Promise((resolve, reject) => {
-				try {
-					const request = requestModule.get(url, {lookup}, res => {
-						if (res.statusCode >= 200 && res.statusCode < 300) {
-							let body = '';
-							res.on('data', data => {
-								body += data;
-							});
-							res.on('end', () => {
-								resolve({last: true, body, response: res});
-							});
-						} else if (
-							res.statusCode >= 300
-							&& res.statusCode < 400
-							&& res.headers.hasOwnProperty('location')
-						) {
-							resolve({last: false, redirect: res.headers.location});
-						} else {
-							reject({code: res.statusCode, response: res});
-						}
-					});
-
-					request.on('error', err => {
-						reject(err);
-					});
-				} catch (e) {
-					reject(e);
-				}
-			});
-
-			if (serverAnswer.last) {
-				return serverAnswer
-			} else {
-				return await this.request(serverAnswer.redirect);
-			}
-		} catch (e) {
-			// Removes unhandled promise rejection warning
-			throw e;
+		if (serverAnswer.last) {
+			return serverAnswer
+		} else {
+			return await this.request(serverAnswer.redirect);
 		}
 	}
 }

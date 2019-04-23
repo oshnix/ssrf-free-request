@@ -30,6 +30,10 @@ const IPv4RestrictedCIDRs = [
 
 const IPv6RestrictedCIDRs = [
 	{
+		mask: '::',
+		bits: 128
+	},
+	{
 		mask: '::1',
 		bits: 128
 	},
@@ -45,32 +49,12 @@ const IPv6RestrictedCIDRs = [
 		mask: '64:ff9b::',
 		bits: 96
 	},
-	{
-		mask: '',
-		bits: 0
-	},
-	{
-		mask: '',
-		bits: 0
-	},
-	{
-		mask: '',
-		bits: 0
-	},
-	{
-		mask: '',
-		bits: 0
-	},
-	{
-		mask: '',
-		bits: 0
-	},
-]
+];
 
 const IPv4Mapped = {
 	mask: '0000:0000:0000:0000:0000:ffff',
 	bits: 96
-}
+};
 
 const IPv4Octets = (ip) => ip.split('.').map(octet => parseInt(octet, 10));
 
@@ -102,7 +86,7 @@ function parseFamily (hostname) {
 	let retVal = null;
 	if (isValidIPv4(hostname)) {
 		retVal = 4
-	} else if (/^\[[^\]]*$/.test(hostname)) {
+	} else if (/^\[[^\]]*]$/.test(hostname)) {
 		retVal = 6;
 	}
 	return retVal;
@@ -142,12 +126,8 @@ function isPublicIPv4 (ip) {
 }
 
 function isPublicIPv6(ip) {
-	if (ip === normalizeIPv6Address('::') || ip === normalizeIPv6Address("::1")) {
-		return false;
-	}
-
-
-
+	const ipOctets = IPv6Octets(ip);
+	return !IPv6RestrictedCIDRs.some(({mask, bits}) => inCidr(ipOctets, IPv6Octets(normalizeIPv6Address(mask)), bits));
 }
 
 function isPrivateAddress (hostname, family) {
@@ -156,24 +136,21 @@ function isPrivateAddress (hostname, family) {
 	}
 
 	if (family === 6) {
+		let match = hostname.match(/^\[([^\]]*)]$/);
+		if (match && match[1]) {
+			hostname = match[1];
+		}
+		hostname = normalizeIPv6Address(hostname);
 		if (isIPv4Mapped(hostname)) {
 			return isPrivateAddress(IPv4MappedToIPv4(hostname), 4);
 		}
 		return !isPublicIPv6(hostname);
-
 	}
 
 	return false;
 }
 
 function normalizeIPv6Address (address) {
-	let match = address.match(/^\[([^\]]*)]$/);
-	if (match && match[1]) {
-		address = match[1];
-	} else {
-		throw new Error(`Invalid IPv6 address ${address}`);
-	}
-
 	let hextets = address.split(':');
 	let last = hextets.length -1;
 	if (hextets[0] === '') {
@@ -182,7 +159,6 @@ function normalizeIPv6Address (address) {
 	if (hextets[last] === '') {
 		hextets[last] = '0'
 	}
-
 	return hextets.map(hextet => {
 		if (hextet === '') {
 			return new Array(8 - hextets.length + 1).fill('0000').join(':');
@@ -193,7 +169,6 @@ function normalizeIPv6Address (address) {
 
 function isIPv4Mapped (addr) {
 	const addrOctets = IPv6Octets(addr);
-	console.log(addrOctets);
 	return inCidr(addrOctets, IPv6Octets(IPv4Mapped.mask), IPv4Mapped.bits);
 }
 
@@ -206,7 +181,5 @@ module.exports = {
 	isPrivateAddress,
 	dnsLookup,
 	parseFamily,
-	normalizeIPv6Address,
-	isIPv4Mapped,
-	IPv4MappedToIPv4
+	normalizeIPv6Address
 };
