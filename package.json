@@ -1,8 +1,8 @@
 {
   "name": "ssrf-free-request",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
-    "node": ">=10.0.0"
+    "node": ">=11.0.0"
   },
   "description": "Node request library on top of http\\https modules which prevents SSRF attacks on hostname.",
   "main": "index.js",

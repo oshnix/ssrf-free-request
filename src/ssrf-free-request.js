@@ -1,4 +1,3 @@
-const { nodeRequestWrapper } = require('./request');
 const { isPrivateAddress, dnsLookup, parseFamily, normalizeIPv6Address } = require('./ipParser');
 const { URL } = require('url');
 const https = require('https');
@@ -54,29 +53,33 @@ class SSRFFreeRequest {
 		};
 
 		const serverAnswer = await new Promise((resolve, reject) => {
-			const request = requestModule.get(url, { lookup }, res => {
+			try {
+				const request = requestModule.get(url, {lookup}, res => {
 					if (res.statusCode >= 200 && res.statusCode < 300) {
 						let body = '';
 						res.on('data', data => {
 							body += data;
 						});
-					res.on('end', () => {
-						resolve({ last: true, body, response: res });
-					});
-				} else if (
-					res.statusCode >= 300
-					&& res.statusCode < 400
-					&& res.headers.hasOwnProperty('location')
-				) {
-					resolve({ last: false, redirect: res.headers.location });
-				} else {
-					reject({ code: res.statusCode, response: res });
-				}
-			});
+						res.on('end', () => {
+							resolve({last: true, body, response: res});
+						});
+					} else if (
+						res.statusCode >= 300
+						&& res.statusCode < 400
+						&& res.headers.hasOwnProperty('location')
+					) {
+						resolve({last: false, redirect: res.headers.location});
+					} else {
+						reject({code: res.statusCode, response: res});
+					}
+				});
 
-			request.on('error', err => {
-				reject(err);
-			});
+				request.on('error', err => {
+					reject(err);
+				});
+			} catch (e) {
+				reject(e);
+			}
 		});
 
 		if (serverAnswer.last) {
