@@ -13,7 +13,7 @@ class SSRFFreeRequest {
 	}
 
 	checkAddress(address, family) {
-		if (family === '6' && !this.options.IPv6Allowed) {
+		if (family === 6 && !this.options.IPv6Allowed) {
 			throw new Error('Only IPv4 address is available');
 		}
 		if (isPrivateAddress(address, family)) {
@@ -31,7 +31,7 @@ class SSRFFreeRequest {
 
 		const family = parseFamily(url.hostname);
 
-		if (family === '6') {
+		if (family === 6) {
 			url.hostname = normalizeIPv6Address(url.hostname);
 		}
 
@@ -42,8 +42,7 @@ class SSRFFreeRequest {
 		const lookup = async (hostname, options, callback) => {
 			let err = undefined;
 			let { address, family } = await dnsLookup(hostname, this.options.IPv6Preferred);
-
-			if (family === '6') {
+			if (family === 6) {
 				address = normalizeIPv6Address(address);
 			}
 

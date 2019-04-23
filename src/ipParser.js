@@ -101,9 +101,9 @@ function inCidr (addrOctets, maskOctets, bits) {
 function parseFamily (hostname) {
 	let retVal = null;
 	if (isValidIPv4(hostname)) {
-		retVal = '4'
+		retVal = 4
 	} else if (/^\[[^\]]*$/.test(hostname)) {
-		retVal = '6';
+		retVal = 6;
 	}
 	return retVal;
 }
@@ -114,7 +114,6 @@ function dnsLookup (hostnameInfo, IPv6Preferred) {
 	return new Promise ((resolve) => {
 		dns.lookup(hostnameInfo, { all: true, verbatim: false }, (err, addresses) => {
 			if (!err) {
-				console.log(addresses);
 				if (IPv6Preferred) {
 					addresses = addresses.reverse();
 				}
@@ -152,13 +151,13 @@ function isPublicIPv6(ip) {
 }
 
 function isPrivateAddress (hostname, family) {
-	if (family === '4' && isValidIPv4(hostname) && !isPublicIPv4(hostname)) {
+	if (family === 4 && isValidIPv4(hostname) && !isPublicIPv4(hostname)) {
 		return true;
 	}
 
-	if (family === '6') {
+	if (family === 6) {
 		if (isIPv4Mapped(hostname)) {
-			return isPrivateAddress(IPv4MappedToIPv4(hostname), '4');
+			return isPrivateAddress(IPv4MappedToIPv4(hostname), 4);
 		}
 		return !isPublicIPv6(hostname);
 
